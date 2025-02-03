@@ -1,0 +1,149 @@
+package main
+
+import (
+	"fmt"
+	"math"
+	"sync"
+	"time"
+)
+
+func detMat(b [][]float64, n int, q bool) float64 { //проверка на невырожденность и вычисление определителя матрицы
+	var det float64 = 1.0
+	a := make([][]float64, n)
+
+	for i := range a {
+		a[i] = make([]float64, n)
+		copy(a[i], b[i])
+	}
+	s := 0.0
+	t := false
+
+	//приводим к верхнетреугольной матрице с 1 на главной диагонали элементарными преобразованиями
+loop:
+	for j := 0; j < n; j++ {
+		for i := j; i < n; i++ {
+			//поднимаем первую строку, имеющую ненулевой элемент в исследуемом столбце. знак определителя меняем на противоположный
+			if a[i][j] != 0 {
+				t = true
+				var wg sync.WaitGroup
+				wg.Add(n)
+				for k := 0; k < n; k++ {
+					go func(l int) {
+						defer wg.Done()
+						s = a[j][l]
+						a[j][l] = a[i][l]
+						a[i][l] = s
+					}(k)
+				}
+				wg.Wait()
+				if i != j {
+					det *= -1
+				}
+
+				//в этом столбце обнуляем элементы, стоящие ниже главной диагонали. определитель не меняется
+				for l := j + 1; l < n; l++ {
+					s = a[l][j] / a[j][j]
+					wg.Add(n)
+					for k := 0; k < n; k++ {
+						go func(m int) {
+							defer wg.Done()
+							a[l][m] -= (a[j][m] * s)
+						}(k)
+					}
+					wg.Wait()
+				}
+
+				//делим строку на первый ненулевой коэффициент. определитель умножаем на то же число
+				s = a[j][j]
+				wg.Add(n - j)
+				for k := j; k < n; k++ {
+					go func(m int) {
+						defer wg.Done()
+						a[j][m] /= s
+					}(k)
+				}
+				wg.Wait()
+				det *= s
+			}
+		}
+		if !t {
+			if q {
+				fmt.Println("Матрица является вырожденной!")
+			}
+			det = 0
+			break loop
+		} else {
+			t = false
+		}
+	}
+	if (math.Abs(det) - 0.0) > 0.00005 {
+		return det
+	} else {
+		return 0.0
+	}
+}
+
+func change_column(a [][]float64, b []float64, n int, i int) [][]float64 {
+	c := make([][]float64, n)
+	for i := range c {
+		c[i] = make([]float64, n)
+		copy(c[i], a[i])
+	}
+	var wg sync.WaitGroup
+	wg.Add(n)
+	for k := 0; k < n; k++ {
+		go func(m int) {
+			defer wg.Done()
+			c[m][i] = b[m]
+		}(k)
+	}
+	wg.Wait()
+	return c
+}
+
+func main() {
+	var n int
+	fmt.Print("Введите количество уравнений (неизвестных) n: ")
+	fmt.Scan(&n)
+
+	fmt.Print("Введите элементы матрицы коэффициентов: ")
+	a := make([][]float64, n)
+	for i := range a {
+		a[i] = make([]float64, n)
+		for j := 0; j < n; j++ {
+			fmt.Scan(&a[i][j])
+		}
+	}
+
+	fmt.Print("Введите столбец свободных членов: ")
+	b := make([]float64, n)
+	for i := range b {
+		fmt.Scan(&b[i])
+	}
+
+	start := time.Now()
+
+	det_a := detMat(a, n, true)
+
+	if det_a == 0.0 {
+		fmt.Println("Применение метода Крамера невозможно.")
+	} else {
+		var wg sync.WaitGroup
+		wg.Add(n)
+		for i := 0; i < n; i++ {
+			go func(m int) {
+				defer wg.Done()
+				c := change_column(a, b, n, i)
+				d := detMat(c, n, false) / det_a
+				if (math.Abs(d) - 0.0) > 0.00005 {
+					fmt.Printf("x_%d = %f", i+1, d)
+				} else {
+					fmt.Printf("x_%d = %d", i+1, 0)
+				}
+				fmt.Println()
+			}(i)
+		}
+		wg.Wait()
+	}
+	fmt.Printf("Время работы программы : %v", time.Now().Sub(start))
+}

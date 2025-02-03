@@ -1,0 +1,113 @@
+import ffmpeg
+from fastapi import FastAPI, UploadFile, File, Body, status
+import uuid
+from os import getcwd
+from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
+from typing import Optional
+from PIL import Image
+import aiofiles
+
+class Item:
+    def __init__(self, file):
+        self.file = file
+        self.id = str(uuid.uuid4())
+
+items = []
+items_names =[]
+
+def find_file(id):
+   for item in items:
+        if item.id == id:
+           return item
+   return None
+
+
+
+app = FastAPI()
+
+@app.get("/")
+async def root():
+    return FileResponse("public/index.html")
+@app.post("/api/files")
+async def post_file(file: UploadFile):
+    if not file:
+        return {"message": "Файл не добавлен"}
+    else:
+        file_type = file.content_type.split('/')[0]
+        if file_type == 'image' or file_type == 'video':
+            with open(file.filename, 'wb') as image:
+                content = await file.read()
+                image.write(content)
+                image.close()
+            item = Item(file)
+            items.append(item)
+            items_names.append([item.id, item.file.filename])
+            return JSONResponse(
+                content={ "id": item.id, "mime": file.content_type, "size": file.size}
+            )
+        else:
+            return JSONResponse(
+                status_code=status.HTTP_415_UNSUPPORTED_MEDIA_TYPE,
+                content={"message": "Файл данного типа не поддерживается"}
+            )
+
+
+@app.get("/api/files/items")
+async def list_of_items():
+    return items_names
+
+@app.get("/api/files/{id}")
+def get_file(id: str, width: int | None = None, height: int | None = None):
+    file = find_file(id)
+    if file==None:
+        return JSONResponse(
+                status_code=status.HTTP_404_NOT_FOUND,
+                content={ "message": "Файл не найден" }
+        )
+    if width is not None and height is not None:
+        if file.file.content_type.split('/')[0] == 'image':
+            im = Image.open(file.file.filename)
+            img_width, img_height = im.size
+            im_new = im.crop(((img_width - width) // 2,
+                         (img_height - height) // 2,
+                         (img_width + width) // 2,
+                         (img_height + height) // 2))
+            name = str('preview_' + file.file.filename)
+            im_new.save(name, quality=95)
+            return FileResponse(path=getcwd() + "/" + name, filename=name, media_type="application/octet-stream")
+        else:
+            name = str(file.id+'preview_of_video.jpg')
+            (
+                ffmpeg
+                .input(file.file.filename)
+                .output(name, format='image2', vframes=1)
+                .run()
+            )
+            im = Image.open(name)
+            img_width, img_height = im.size
+            im_new = im.crop(((img_width - width) // 2,
+                              (img_height - height) // 2,
+                              (img_width + width) // 2,
+                              (img_height + height) // 2))
+            im_new.save(name, quality=95)
+            return FileResponse(path=getcwd() + "/" + name, filename=name, media_type="application/octet-stream")
+    else:
+        return FileResponse(path=getcwd() + "/" + file.file.filename, filename=file.file.filename, media_type="application/octet-stream")
+
+
+
+
+файл "public/index.html"
+
+<!DOCTYPE html>
+<html>
+<body>
+    <div>
+        <form action="/api/files" enctype='multipart/form-data' method='post'>
+            <input name='file' type='file'>
+            <input type='submit'>
+        </form>
+    </div>
+</body>
+</html>

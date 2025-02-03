@@ -1,0 +1,142 @@
+package main
+
+import (
+	"fmt"
+	"math"
+	"time"
+)
+
+func main() {
+	var n, m int
+	fmt.Print("Введите количество уравнений m: ")
+	fmt.Scan(&m)
+	fmt.Print("Введите количество неизвестных n: ")
+	fmt.Scan(&n)
+
+	fmt.Print("Введите элементы матрицы коэффициентов: ")
+	a := make([][]float64, m)
+	for i := range a {
+		a[i] = make([]float64, n)
+		for j := 0; j < n; j++ {
+			fmt.Scan(&a[i][j])
+		}
+	}
+
+	fmt.Print("Введите столбец свободных членов: ")
+	b := make([]float64, m)
+	for i := range b {
+		fmt.Scan(&b[i])
+	}
+
+	start := time.Now()
+
+	index := 0
+	s := 0.0
+
+	//прямой ход
+	for j := 0; j < n; j++ {
+		for i := index; i < m; i++ {
+
+			if a[i][j] != 0 {
+				//поднимаем первую строку, имеющую ненулевой элемент в исследуемом столбце
+				for k := 0; k < n; k++ {
+					s = a[index][k]
+					a[index][k] = a[i][k]
+					a[i][k] = s
+				}
+				s = b[index]
+				b[index] = b[i]
+				b[i] = s
+
+				//обнуляем все остальные элементы в этом столбце
+				for l := 0; l < m; l++ {
+					s = a[l][j] / a[index][j]
+					if !(l == index) {
+						for k := 0; k < n; k++ {
+							a[l][k] -= (a[index][k] * s)
+						}
+						b[l] -= (b[index] * s)
+
+					}
+				}
+
+				//делим строку на первый ненулевой коэффициент
+				s = a[index][j]
+				for k := j; k < n; k++ {
+					a[index][k] /= s
+				}
+				b[index] /= s
+
+				//переходим к поиску следующей зависимой переменной
+				index++
+			}
+		}
+
+		if index == m { //нашли все зависимые переменные
+			break
+		}
+	}
+
+	index = 0
+	q := true
+	t := false
+
+	//проверка на несовместность
+	for i := 0; i < m; i++ {
+		for j := 0; j < n; j++ {
+			if (math.Abs(a[i][j]) - 0.0) < 0.00005 {
+				index++
+			}
+		}
+		if index == n {
+			if (math.Abs(b[i]) - 0.0) > 0.00005 {
+				q = false
+				fmt.Println("Система несовместна!")
+			}
+		}
+		index = 0
+	}
+
+	//обратный ход с выводом решения системы
+	if q {
+		for i := 0; i < m; i++ {
+			for j := 0; j < n; j++ {
+				if (math.Abs(a[i][j]) - 0.0) < 0.00005 {
+					index++
+				} else if (a[i][j] - 0.0) > 0.00005 {
+					if a[i][j] == 1 {
+						if !t {
+							fmt.Printf("x_%d = ", j+1)
+							t = true
+						} else {
+							fmt.Printf(" -x_%d ", j+1)
+						}
+					} else {
+						fmt.Printf("%f x_%d ", -a[i][j], j+1)
+					}
+				} else {
+					if (j - index) == 1 {
+						fmt.Printf("%f x_%d ", -a[i][j], j+1)
+					} else {
+						fmt.Printf("+ %f x_%d ", -a[i][j], j+1)
+					}
+				}
+			}
+			if index != n {
+				if (b[i]-0.0) > 0.00005 && (n-index) > 1 {
+					fmt.Println(" + ", b[i])
+				} else {
+					if (math.Abs(b[i]) - 0.0) < 0.00005 {
+						fmt.Println(0)
+					} else {
+						fmt.Println(b[i])
+					}
+				}
+			}
+			index = 0
+			t = false
+		}
+	}
+
+	fmt.Printf("Время работы программы : %v", time.Now().Sub(start))
+}

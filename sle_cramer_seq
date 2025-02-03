@@ -46,14 +46,6 @@ loop:
 					a[j][k] /= s
 				}
 				det *= s
-
-				// for l := 0; l < n; l++ {
-				// 	for k := 0; k < n; k++ {
-				// 		fmt.Print(a[l][k], " ")
-				// 	}
-				// 	fmt.Println()
-				// }
-				// fmt.Println("det= ", det)
 			}
 		}
 		if !t {
